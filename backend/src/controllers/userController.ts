@@ -52,9 +52,11 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
+    const token = createAccessToken({ id: user.id, email: user.email, role: user.role })
     res.json({
       success: true,
       message: "Login successful",
+      token,
       user: { id: user.id, email: user.email, role: user.role }
     });
   } catch (error) {
@@ -62,3 +64,30 @@ export async function login(req: Request, res: Response) {
     res.status(500).json({ message: "Internal server error" });
   }
 }
+
+
+export const createAppointment = async (req:Request, res: Response) => {
+  try {
+    const { patientId, doctorId, slotId, consultationFee, mode, symptoms, notes } = req.body;
+
+    const appointment = await prisma.appointment.create({
+      data: {
+        patientId,
+        doctorId,
+        slotId,
+        status: "pending",
+        mode,
+        consultationFee, 
+        symptoms,
+        notes
+      }
+    });
+
+    res.status(201).json({ success: true, appointment });
+  } catch (error) {
+    console.error("Error creating appointment:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+  
