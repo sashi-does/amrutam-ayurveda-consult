@@ -63,8 +63,10 @@ model Doctor {
   experience      Int
   consultationFee Decimal
   qualifications  Json
+  bio             String        @default("")
   rating          Decimal
   totalReviews    Int
+  mode            Mode          @default(in_person)
   isActive        Boolean       @default(false)
   isApproved      Boolean       @default(false)
   slots           Slot[]

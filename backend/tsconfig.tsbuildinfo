@@ -1,0 +1,1 @@
+{"root":["./src/app.ts","./src/config/client.ts","./src/controllers/doctorcontroller.ts","./src/controllers/usercontroller.ts","./src/lib/prisma.ts","./src/middleware/auth.ts","./src/routes/adminrouter.ts","./src/routes/doctorrouter.ts","./src/routes/index.ts","./src/routes/userrouter.ts","./src/utils/hash.ts","./src/utils/token.ts"],"errors":true,"version":"5.9.2"}

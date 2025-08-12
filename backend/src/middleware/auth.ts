@@ -1,6 +1,14 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../utils/token.ts";
 
+declare global {
+    namespace Express {
+        interface Request {
+            token: string
+        }
+    }
+}
+
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
     const authHeader = req.headers.authorization;
@@ -9,9 +17,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     }
 
     const token = authHeader.split(" ")[1];
+    console.log("Middleware: " + token)
     const decoded = verifyAccessToken(token as string) as { userId: string }
     if(decoded) {
-        req.body.id = decoded.userId
+        req.token = token as string
+        console.log(req.token)
         next()
     }
 
