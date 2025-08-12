@@ -62,35 +62,31 @@ model Doctor {
   specialization  String
   experience      Int
   consultationFee Decimal
-  modes           Json
-  bio             String
   qualifications  Json
   rating          Decimal
   totalReviews    Int
   isActive        Boolean       @default(false)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
   isApproved      Boolean       @default(false)
   slots           Slot[]
   appointments    Appointment[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
+
 model Slot {
-  id               String     @id @default(uuid())
-  doctorId         String
-  doctor           Doctor     @relation(fields: [doctorId], references: [id])
-  startTime        DateTime
-  endTime          DateTime
-  mode             Mode
-  status           SlotStatus
-  isRecurring      Boolean    @default(false)
-  recurringPattern Json?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  id         String   @id @default(uuid())
+  doctor     Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId   String
+  startTime  DateTime
+  endTime    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   appointments Appointment[]
   slotLocks    SlotLock[]
 }
+
 
 model Appointment {
   id              String            @id @default(uuid())
@@ -104,7 +100,6 @@ model Appointment {
   mode            Mode
   consultationFee Decimal
   symptoms        String?
-  notes           String?
   meetingLink     String?
   confirmedAt     DateTime?
   createdAt       DateTime          @default(now())
