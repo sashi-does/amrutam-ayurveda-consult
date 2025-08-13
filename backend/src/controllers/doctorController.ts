@@ -200,5 +200,34 @@ export async function getFilteredDoctors(req: Request, res: Response) {
       console.error(err);
       res.status(500).json({ message: "Error fetching doctors" });
     }
+}
+
+export async function getDoctorSlots(req: Request, res: Response) {
+    try {
+      const { doctorId } = req.query;
+      console.log(doctorId)
+  
+      if (!doctorId) {
+        return res.status(400).json({ success: false, message: "doctorId is required" });
+      }
+  
+      const slots = await prisma.slot.findMany({
+        where: {
+          doctorId: doctorId as string,
+        },
+        orderBy: {
+          startTime: "asc",
+        },
+      });
+  
+      return res.status(200).json({
+        success: true,
+        doctorId,
+        slots,
+      });
+    } catch (error) {
+      console.error("Error fetching doctor slots:", error);
+      return res.status(500).json({ success: false, message: "Internal server error" });
+    }
   }
   
