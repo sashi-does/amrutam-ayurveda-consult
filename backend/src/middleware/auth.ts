@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../utils/token.ts";
+import type { UserPayload } from "../types/payload.ts";
 
 declare global {
     namespace Express {
@@ -18,7 +19,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 
     const token = authHeader.split(" ")[1];
     console.log("Middleware: " + token)
-    const decoded = verifyAccessToken(token as string) as { userId: string }
+    const decoded = verifyAccessToken(token as string) as UserPayload
     if(decoded) {
         req.token = token as string
         console.log(req.token)

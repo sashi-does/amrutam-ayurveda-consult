@@ -195,7 +195,7 @@ export async function getFilteredDoctors(req: Request, res: Response) {
         );
       
 
-      res.json(doctors);
+      res.json({ success: true, doctors });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Error fetching doctors" });
