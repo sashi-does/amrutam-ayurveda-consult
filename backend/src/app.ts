@@ -21,4 +21,6 @@ if (process.env.VERCEL !== "1") {
   });
 }
 
-export default app;
+export default (req: any, res: any) => {
+  app(req, res);
+};
