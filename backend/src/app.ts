@@ -14,13 +14,12 @@ app.get("/", (req, res) => {
   res.send("Hello");
 });
 
-// Only listen locally
-if (process.env.VERCEL !== "1") {
+
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`Running at port: ${port}`);
   });
 }
 
-export default (req: any, res: any) => {
-  app(req, res);
-};
+
+export default app;

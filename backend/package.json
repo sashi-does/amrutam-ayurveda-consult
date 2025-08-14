@@ -2,17 +2,20 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "src/index.ts",
+  "main": "src/app.ts",
   "scripts": {
     "dev": "nodemon --exec ts-node ./src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
+    "vercel-build": "prisma generate && tsc",
     "type-check": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "common",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@prisma/client": "^6.5.0",
     "@types/bcrypt": "^6.0.0",
@@ -24,14 +27,14 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "resend": "^6.0.1"
+    "resend": "^6.0.1",
+    "typescript": "^5.9.2",
+    "ts-node": "^10.9.2",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.2.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.3",
-    "@types/node": "^24.2.1",
     "nodemon": "^3.1.10",
-    "prisma": "^6.5.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.2"
+    "prisma": "^6.5.0"
   }
 }
