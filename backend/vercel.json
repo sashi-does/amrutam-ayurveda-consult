@@ -11,9 +11,6 @@
         "src": "/(.*)",
         "dest": "src/index.ts"
       }
-    ],
-    "buildCommand": "npm install && npm run build",
-    "outputDirectory": "",
-    "rootDirectory": "backend"
+    ]
   }
   
