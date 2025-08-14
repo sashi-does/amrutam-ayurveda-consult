@@ -71,14 +71,14 @@ export default function DoctorsPage() {
       // Fetch doctors for different specializations to get a variety
       const specializations = ["Cardiology", "Ayurvedic Dermatology", "Panchakarma Specialist"]
       const modes = ["online", "in_person"]
-
+      console.log(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all?specialisation`,)
       let allDoctors: Doctor[] = []
 
       for (const spec of specializations) {
         for (const mode of modes) {
           try {
             const response = await fetch(
-              `http://localhost:3000/api/v1/doctors/all?specialisation=${encodeURIComponent(spec)}&mode=${mode}`,
+              `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all?specialisation=${encodeURIComponent(spec)}&mode=${mode}`,
             )
             const data = await response.json()
             if (data.doctors) {

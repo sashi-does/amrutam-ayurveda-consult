@@ -111,7 +111,7 @@ export default function BookingPage() {
 
     try {
       // Fetch doctor details
-      const doctorResponse = await fetch(`http://localhost:3000/api/v1/doctors/all`)
+      const doctorResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all`)
       const doctorData = await doctorResponse.json()
 
       if (doctorData.doctors) {
@@ -130,7 +130,7 @@ export default function BookingPage() {
       }
 
       // Fetch available slots
-      const slotsResponse = await fetch(`http://localhost:3000/api/v1/doctors/slot/all?doctorId=${doctorId}`)
+      const slotsResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
       const slotsData = await slotsResponse.json()
 
       if (slotsData.success && slotsData.slots) {
@@ -158,7 +158,7 @@ export default function BookingPage() {
     setError("")
 
     try {
-      const response = await makeAuthenticatedRequest("http://localhost:3000/api/v1/auth/appointments/create", {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/appointments/create`, {
         method: "POST",
         body: JSON.stringify(bookingData),
       })
@@ -181,7 +181,7 @@ export default function BookingPage() {
 
   const sendOTP = async () => {
     try {
-      await makeAuthenticatedRequest("http://localhost:3000/api/v1/auth/otp/send", {
+      await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/otp/send`, {
         method: "POST",
       })
     } catch (err) {
@@ -195,7 +195,7 @@ export default function BookingPage() {
     setError("")
 
     try {
-      const response = await makeAuthenticatedRequest("http://localhost:3000/api/v1/auth/otp/verify", {
+      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/otp/verify`, {
         method: "POST",
         headers: {
           otp: otpCode,
