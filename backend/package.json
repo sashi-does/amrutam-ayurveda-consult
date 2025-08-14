@@ -7,7 +7,7 @@
     "dev": "nodemon --exec ts-node ./src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "vercel-build": "prisma generate && tsc",
+    "vercel-build": "prisma generate --schema=./src/prisma/schema.prisma && tsc",
     "type-check": "tsc --noEmit"
   },
   "keywords": [],
