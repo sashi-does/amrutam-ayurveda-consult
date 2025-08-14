@@ -1,5 +1,5 @@
 import express from "express";
-import apiRoutes from "./routes/index.ts";
+import apiRoutes from "./routes/index";
 import cors from "cors";
 
 const app = express();
