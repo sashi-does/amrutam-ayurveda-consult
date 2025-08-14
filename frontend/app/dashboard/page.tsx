@@ -107,7 +107,6 @@ export default function DashboardPage() {
       const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/appointments`
       console.log(url)
       const response = await makeAuthenticatedRequest(url)
-      alert(JSON.stringify(response))
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.appointments) {
