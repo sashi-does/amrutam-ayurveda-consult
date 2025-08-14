@@ -56,12 +56,12 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const token = createAccessToken({ id: user.id, email: user.email, role: user.role })
+    const token = createAccessToken({ id: user.id, email: user.email, role: user.role, firstName: user.firstName })
     res.json({
       success: true,
       message: "Login successful",
       token,
-      user: { id: user.id, email: user.email, role: user.role }
+      user: { id: user.id, email: user.email, role: user.role, firstName: user.firstName }
     });
   } catch (error) {
     console.error(error);
