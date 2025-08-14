@@ -1,5 +1,8 @@
-import { verifyAccessToken } from "../utils/token.ts";
-export function authMiddleware(req, res, next) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.authMiddleware = authMiddleware;
+const token_1 = require("../utils/token");
+function authMiddleware(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -7,7 +10,7 @@ export function authMiddleware(req, res, next) {
         }
         const token = authHeader.split(" ")[1];
         console.log("Middleware: " + token);
-        const decoded = verifyAccessToken(token);
+        const decoded = (0, token_1.verifyAccessToken)(token);
         if (decoded) {
             req.token = token;
             console.log(req.token);

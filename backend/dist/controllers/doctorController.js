@@ -1,16 +1,24 @@
-import { comparePassword, hashPassword } from "../utils/hash.ts";
-import { prisma } from "../lib/prisma.ts";
-import { createAccessToken } from "../utils/token.ts";
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerDoctor = registerDoctor;
+exports.loginDoctor = loginDoctor;
+exports.createSlot = createSlot;
+exports.getDoctors = getDoctors;
+exports.getFilteredDoctors = getFilteredDoctors;
+exports.getDoctorSlots = getDoctorSlots;
+const hash_1 = require("../utils/hash");
+const prisma_1 = require("../lib/prisma");
+const token_1 = require("../utils/token");
 // For Doctor
-export async function registerDoctor(req, res) {
+async function registerDoctor(req, res) {
     try {
         const { firstName, lastName, email, password, phone, specialization, experience, consultationFee, mode, bio, qualifications, } = req.body;
-        const existingUser = await prisma.user.findUnique({ where: { email } });
+        const existingUser = await prisma_1.prisma.user.findUnique({ where: { email } });
         if (existingUser) {
             return res.status(400).json({ message: "Email already registered" });
         }
-        const hashedPassword = await hashPassword(password);
-        const result = await prisma.$transaction(async (tx) => {
+        const hashedPassword = await (0, hash_1.hashPassword)(password);
+        const result = await prisma_1.prisma.$transaction(async (tx) => {
             const user = await tx.user.create({
                 data: {
                     firstName,
@@ -37,7 +45,7 @@ export async function registerDoctor(req, res) {
             });
             return { user, doctor };
         });
-        const token = createAccessToken({
+        const token = (0, token_1.createAccessToken)({
             userId: result.user.id,
             role: result.user.role,
             email: result.user.email,
@@ -55,18 +63,18 @@ export async function registerDoctor(req, res) {
         res.status(500).json({ message: "Internal server error" });
     }
 }
-export async function loginDoctor(req, res) {
+async function loginDoctor(req, res) {
     try {
         const { email, password } = req.body;
-        const user = await prisma.user.findUnique({ where: { email } });
+        const user = await prisma_1.prisma.user.findUnique({ where: { email } });
         if (!user || user.role !== "doctor") {
             return res.status(401).json({ message: "Invalid credentials" });
         }
-        const passwordMatch = await comparePassword(password, user.password);
+        const passwordMatch = await (0, hash_1.comparePassword)(password, user.password);
         if (!passwordMatch) {
             return res.status(401).json({ message: "Invalid credentials" });
         }
-        const token = createAccessToken({
+        const token = (0, token_1.createAccessToken)({
             userId: user.id,
             role: user.role,
             email: user.email,
@@ -83,7 +91,7 @@ export async function loginDoctor(req, res) {
         res.status(500).json({ message: "Internal server error" });
     }
 }
-export async function createSlot(req, res) {
+async function createSlot(req, res) {
     try {
         const { doctorId, startTime, endTime } = req.body;
         if (!doctorId || !startTime || !endTime) {
@@ -94,7 +102,7 @@ export async function createSlot(req, res) {
         if (start >= end) {
             return res.status(400).json({ error: "startTime must be before endTime" });
         }
-        const doctor = await prisma.doctor.findUnique({
+        const doctor = await prisma_1.prisma.doctor.findUnique({
             where: { id: doctorId },
         });
         if (!doctor) {
@@ -103,7 +111,7 @@ export async function createSlot(req, res) {
         if (!doctor.isActive || !doctor.isApproved) {
             return res.status(403).json({ error: "Doctor is not active or approved" });
         }
-        const slot = await prisma.slot.create({
+        const slot = await prisma_1.prisma.slot.create({
             data: {
                 doctorId,
                 startTime: start,
@@ -118,9 +126,9 @@ export async function createSlot(req, res) {
     }
 }
 // For Admin
-export async function getDoctors(req, res) {
+async function getDoctors(req, res) {
     try {
-        const doctors = await prisma.doctor.findMany({
+        const doctors = await prisma_1.prisma.doctor.findMany({
             orderBy: { createdAt: "desc" },
             include: {
                 user: {
@@ -142,21 +150,47 @@ export async function getDoctors(req, res) {
     }
 }
 // For Patients
-export async function getFilteredDoctors(req, res) {
+async function getFilteredDoctors(req, res) {
     try {
         const { specialization, mode } = req.query;
-        let doctors = await prisma.doctor.findMany({
+        let doctors = await prisma_1.prisma.doctor.findMany({
             include: { slots: true }
         });
         if (specialization)
             doctors = doctors.filter(doc => doc.specialization.toLowerCase() === specialization.toLowerCase());
         if (mode)
             doctors = doctors.filter(doc => doc.mode === mode);
-        res.json(doctors);
+        res.json({ success: true, doctors });
     }
     catch (err) {
         console.error(err);
         res.status(500).json({ message: "Error fetching doctors" });
+    }
+}
+async function getDoctorSlots(req, res) {
+    try {
+        const { doctorId } = req.query;
+        console.log(doctorId);
+        if (!doctorId) {
+            return res.status(400).json({ success: false, message: "doctorId is required" });
+        }
+        const slots = await prisma_1.prisma.slot.findMany({
+            where: {
+                doctorId: doctorId,
+            },
+            orderBy: {
+                startTime: "asc",
+            },
+        });
+        return res.status(200).json({
+            success: true,
+            doctorId,
+            slots,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching doctor slots:", error);
+        return res.status(500).json({ success: false, message: "Internal server error" });
     }
 }
 //# sourceMappingURL=doctorController.js.map
