@@ -1,5 +1,5 @@
 import express from "express"
-import { registerDoctor, getDoctors, createSlot, getFilteredDoctors, getDoctorSlots } from "../controllers/doctorController.ts"
+import { registerDoctor, getDoctors, createSlot, getFilteredDoctors, getDoctorSlots } from "../controllers/doctorController"
 
 const doctorRouter = express.Router()
 

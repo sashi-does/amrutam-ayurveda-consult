@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
-import { verifyAccessToken } from "../utils/token.ts";
-import type { UserPayload } from "../types/payload.ts";
+import { verifyAccessToken } from "../utils/token";
+import type { UserPayload } from "../types/payload";
 
 declare global {
     namespace Express {

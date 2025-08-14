@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { comparePassword, hashPassword } from "../utils/hash.ts";
-import { prisma } from "../lib/prisma.ts";
-import { createAccessToken } from "../utils/token.ts";
+import { comparePassword, hashPassword } from "../utils/hash";
+import { prisma } from "../lib/prisma";
+import { createAccessToken } from "../utils/token";
 
 // For Doctor
 export async function registerDoctor(req: Request, res: Response) {

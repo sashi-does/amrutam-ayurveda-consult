@@ -1,6 +1,6 @@
 import { Router } from "express";
-import userRouter from "./userRouter.ts";
-import doctorRouter from "./doctorRouter.ts";
+import userRouter from "./userRouter";
+import doctorRouter from "./doctorRouter";
 
 const router = Router();
 

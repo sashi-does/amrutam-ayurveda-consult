@@ -1,11 +1,11 @@
 import type { Request, Response } from "express";
-import { prisma } from "../lib/prisma.ts";
-import { hashPassword, comparePassword } from "../utils/hash.ts";
-import { createAccessToken, verifyAccessToken } from "../utils/token.ts";
-import { generateOTP } from "../services/otpGenerator.ts";
-import { sendOtpMail } from "../services/otpSender.ts";
+import { prisma } from "../lib/prisma";
+import { hashPassword, comparePassword } from "../utils/hash";
+import { createAccessToken, verifyAccessToken } from "../utils/token";
+import { generateOTP } from "../services/otpGenerator";
+import { sendOtpMail } from "../services/otpSender";
 import { Redis } from "@upstash/redis";
-import getRedisClient from "../config/redis.ts";
+import getRedisClient from "../config/redis";
 
 export async function register(req: Request, res: Response) {
   try {

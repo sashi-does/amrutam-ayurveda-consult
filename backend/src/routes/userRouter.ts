@@ -1,6 +1,6 @@
 import express from "express"
-import { register, login, createAppointment, sendOtpToMail, verify, getAppointments } from "../controllers/userController.ts"
-import { authMiddleware } from "../middleware/auth.ts";
+import { register, login, createAppointment, sendOtpToMail, verify, getAppointments } from "../controllers/userController"
+import { authMiddleware } from "../middleware/auth";
 
 const userRouter = express.Router()
 
