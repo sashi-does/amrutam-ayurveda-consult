@@ -4,10 +4,9 @@
   "description": "",
   "main": "src/index.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./dist/src/app.js",
-    "build": "npx tsc -b",
-    "dev": "nodemon --exec ts-node ./src/app.ts"
+    "dev": "nodemon --exec ts-node ./src/app.ts",
+    "build": "tsc",
+    "start": "node dist/src/app.js"
   },
   "keywords": [],
   "author": "",
