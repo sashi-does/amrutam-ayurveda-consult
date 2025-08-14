@@ -80,8 +80,8 @@ model Slot {
   id         String   @id @default(uuid())
   doctor     Doctor   @relation(fields: [doctorId], references: [id])
   doctorId   String
-  startTime  DateTime
-  endTime    DateTime
+  startTime  DateTime @db.Time
+  endTime    DateTime @db.Time
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
