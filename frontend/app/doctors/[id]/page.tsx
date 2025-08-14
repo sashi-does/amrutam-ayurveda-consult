@@ -59,11 +59,11 @@ export default function DoctorProfilePage() {
   }, [doctorId])
 
   const fetchDoctorProfile = async () => {
+  
     try {
-      // Since we don't have a single doctor endpoint, we'll fetch from the doctors list
-      // In a real app, you'd have a dedicated endpoint for single doctor
-      const response = await fetch(`${process.env.BASE_URL}/api/v1/doctors/all`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all`)
       const data = await response.json()
+      
 
       if (data.doctors) {
         const foundDoctor = data.doctors.find((d: Doctor) => d.id === doctorId)
@@ -80,7 +80,7 @@ export default function DoctorProfilePage() {
 
   const fetchDoctorSlots = async () => {
     try {
-      const response = await fetch(`${process.env.BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
       const data = await response.json()
 
       if (data.success && data.slots) {
