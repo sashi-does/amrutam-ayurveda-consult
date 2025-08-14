@@ -1,10 +1,19 @@
 {
     "version": 2,
+    "builds": [
+      {
+        "src": "src/index.ts",
+        "use": "@vercel/node"
+      }
+    ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "dist/src/app.js"
+        "dest": "src/index.ts"
       }
-    ]
+    ],
+    "buildCommand": "npm install && npm run build",
+    "outputDirectory": "",
+    "rootDirectory": "backend"
   }
   
