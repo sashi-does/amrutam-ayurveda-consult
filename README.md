@@ -53,21 +53,13 @@ npm install --peer-legacy-deps
 ### 3. Environment Configuration
 Create a `.env` file in the backend directory:
 ```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/database_name"
-
-# JWT
-JWT_SECRET="your-super-secret-jwt-key"
-
-# Email (for OTP)
-EMAIL_HOST="smtp.gmail.com"
-EMAIL_PORT=587
-EMAIL_USER="your-email@gmail.com"
-EMAIL_PASS="your-app-password"
-
-# Server
+DATABASE_URL=
 PORT=3000
 NODE_ENV="development"
+JWT_SECRET=
+AMRUTAM_MAIL_KEY=
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=
 ```
 
 ### 4. Database Setup & Start Server
@@ -91,13 +83,10 @@ npm install --peer-legacy-deps
 ```
 
 ### 3. Environment Configuration
-Create a `.env.local` file in the frontend directory:
+Create a `.env` file in the frontend directory:
 ```env
 # API Base URL
-NEXT_PUBLIC_API_URL="http://localhost:3000/api/v1"
-
-# Other environment variables if needed
-NEXT_PUBLIC_APP_NAME="Amrutam Ayurveda"
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
 ### 4. Start Frontend Development Server
