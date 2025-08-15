@@ -23,6 +23,8 @@ import {
   Video,
   MapPin,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
@@ -74,6 +76,12 @@ export default function BookingPage() {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [slots, setSlots] = useState<Slot[]>([])
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return today
+  })
+  const [currentMonth, setCurrentMonth] = useState(new Date())
   const [bookingData, setBookingData] = useState<BookingData>({
     doctorId,
     slotId: "",
@@ -110,7 +118,6 @@ export default function BookingPage() {
     setError("")
 
     try {
-      // Fetch doctor details
       const doctorResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all`)
       const doctorData = await doctorResponse.json()
 
@@ -129,14 +136,12 @@ export default function BookingPage() {
         }
       }
 
-      // Fetch available slots
       const slotsResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
       const slotsData = await slotsResponse.json()
+      console.log(slotsData.slots)
 
       if (slotsData.success && slotsData.slots) {
-        // Filter future slots only
-        const futureSlots = slotsData.slots.filter((slot: Slot) => new Date(slot.startTime) > new Date())
-        setSlots(futureSlots)
+        setSlots(slotsData.slots)
       }
     } catch (err) {
       setError("Failed to load booking information")
@@ -148,9 +153,67 @@ export default function BookingPage() {
   const handleSlotSelection = (slot: Slot) => {
     setSelectedSlot(slot)
     setBookingData((prev) => ({ ...prev, slotId: slot.id }))
-    // Start 5-minute timer for slot lock
-    setSlotLockTimer(300) // 5 minutes = 300 seconds
+    setSlotLockTimer(600) 
   }
+
+  // Calendar helper functions
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const daysInMonth = lastDay.getDate()
+    const startingDayOfWeek = firstDay.getDay()
+
+    const days = []
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null)
+    }
+    
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day))
+    }
+    
+    return days
+  }
+
+  const navigateMonth = (direction: number) => {
+    const newMonth = new Date(currentMonth)
+    newMonth.setMonth(currentMonth.getMonth() + direction)
+    setCurrentMonth(newMonth)
+  }
+
+  const isDateAvailable = (date: Date | null) => {
+    if (!date) return false
+    return slots.some(slot => {
+      const slotDate = new Date(slot.startTime)
+      return slotDate.toDateString() === date.toDateString()
+    })
+  }
+
+  const isDateSelected = (date: Date | null) => {
+    if (!date) return false
+    return date.toDateString() === selectedDate.toDateString()
+  }
+
+  const isPastDate = (date: Date | null) => {
+    if (!date) return false
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const compareDate = new Date(date)
+    compareDate.setHours(0, 0, 0, 0)
+    // Only dates BEFORE today are past dates - today and future are allowed
+    return compareDate < today
+  }
+
+  // Filter slots based on selected date
+  const filteredSlots = slots.filter(slot => {
+    const slotDate = new Date(slot.startTime)
+    return slotDate.toDateString() === selectedDate.toDateString()
+  })
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -238,6 +301,13 @@ export default function BookingPage() {
     const remainingSeconds = seconds % 60
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ]
+
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   if (isLoading) {
     return (
@@ -391,60 +461,201 @@ export default function BookingPage() {
         {/* Step Content */}
         <div className="max-w-4xl mx-auto">
           {currentStep === "slot-selection" && (
-            <Card className="border-green-100">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-700">
-                  <Calendar className="h-5 w-5" />
-                  Select Available Slot
-                </CardTitle>
-                <CardDescription>Choose your preferred appointment time</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {slots.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No slots available</h3>
-                    <p className="text-gray-600">Please check back later or contact the doctor directly.</p>
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Calendar Component */}
+              <Card className="border-green-100">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-700">
+                    <Calendar className="h-5 w-5" />
+                    Select Date
+                  </CardTitle>
+                  <CardDescription>Choose a date to view available slots</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {/* Calendar Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => navigateMonth(-1)}
+                      className="p-2"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <h3 className="text-lg font-semibold">
+                      {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+                    </h3>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigateMonth(1)}
+                      className="p-2"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {slots.map((slot) => {
-                      const { date, time } = formatDateTime(slot.startTime)
-                      const isSelected = selectedSlot?.id === slot.id
 
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-1 mb-2">
+                    {dayNames.map(day => (
+                      <div key={day} className="p-2 text-center text-xs font-medium text-gray-500">
+                        {day}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {getDaysInMonth(currentMonth).map((date, index) => {
+                      const hasSlots = isDateAvailable(date)
+                      const isSelected = isDateSelected(date)
+                      const isPast = isPastDate(date)
+                      
                       return (
-                        <Card
-                          key={slot.id}
-                          className={`cursor-pointer transition-all hover:shadow-md ${
-                            isSelected ? "border-green-700 bg-green-50" : "border-gray-200"
-                          }`}
-                          onClick={() => handleSlotSelection(slot)}
+                        <button
+                          key={index}
+                          onClick={() => date && !isPast && setSelectedDate(date)}
+                          disabled={!date || isPast || !hasSlots}
+                          className={`
+                            p-2 text-sm rounded-md transition-all h-10
+                            ${!date ? 'invisible' : ''}
+                            ${isPast ? 'text-gray-300 cursor-not-allowed' : ''}
+                            ${hasSlots && !isPast ? 'hover:bg-green-50 cursor-pointer' : ''}
+                            ${!hasSlots && !isPast ? 'text-gray-400 cursor-not-allowed' : ''}
+                            ${isSelected ? 'bg-green-600 text-white' : ''}
+                            ${hasSlots && !isSelected && !isPast ? 'bg-green-100 text-green-700' : ''}
+                          `}
                         >
-                          <CardContent className="p-4">
-                            <div className="text-center">
-                              <div className="font-medium text-gray-900 mb-1">{date}</div>
-                              <div className="text-green-700 font-semibold">{time}</div>
-                              {isSelected && <CheckCircle className="h-5 w-5 text-green-700 mx-auto mt-2" />}
-                            </div>
-                          </CardContent>
-                        </Card>
+                          {date && date.getDate()}
+                          {hasSlots && !isSelected && (
+                            <div className="w-1 h-1 bg-green-600 rounded-full mx-auto mt-0.5"></div>
+                          )}
+                        </button>
                       )
                     })}
                   </div>
-                )}
 
-                {selectedSlot && (
-                  <div className="mt-6 flex justify-end">
-                    <Button
-                      onClick={() => setCurrentStep("booking-details")}
-                      className="bg-green-700 hover:bg-green-800"
-                    >
-                      Continue to Booking Details
-                    </Button>
+                  <div className="mt-4 text-xs text-gray-600">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-green-100 rounded"></div>
+                        <span>Available</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-green-600 rounded"></div>
+                        <span>Selected</span>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+
+              {/* Time Slots Component */}
+              <Card className="border-green-100">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-green-700">
+                    <Clock className="h-5 w-5" />
+                    Available Slots
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedDate.toLocaleDateString('en-IN', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {slots.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No slots available</h3>
+                      <p className="text-gray-600">Please select a different date or contact the doctor directly.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      {slots.map((slot) => {
+                        const { time } = formatDateTime(slot.startTime)
+                        const isSelected = selectedSlot?.id === slot.id
+                    
+                        return (
+                          <Card
+                            key={slot.id}
+                            className={`cursor-pointer transition-all hover:shadow-sm rounded-lg ${
+                              isSelected ? "border-green-600 bg-green-50" : "border-gray-200"
+                            }`}
+                            onClick={() => handleSlotSelection(slot)}
+                          >
+                            <CardContent className="p-3 flex items-center justify-center">
+                              <span className="text-green-700 font-medium text-sm">{time}</span>
+                              {isSelected && <CheckCircle className="h-4 w-4 text-green-700 ml-2" />}
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {selectedSlot && (
+                    <div className="mt-6">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <h4 className="font-medium text-green-800 mb-1">Selected Appointment</h4>
+                        <p className="text-green-700 text-sm">
+                          {selectedDate.toLocaleDateString('en-IN', { 
+                            weekday: 'long', 
+                            year: 'numeric', 
+                            month: 'long', 
+                            day: 'numeric' 
+                          })} at {formatDateTime(selectedSlot.startTime).time}
+                        </p>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={async () => {
+                            setIsSubmitting(true)
+                            setError("")
+                            
+                            try {
+                              const response = await makeAuthenticatedRequest(
+                                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/lock-slot`,
+                                {
+                                  method: "POST",
+                                  body: JSON.stringify({
+                                    slotId: selectedSlot.id,
+                                    doctorId: doctorId
+                                  })
+                                }
+                              )
+                              
+                              const data = await response.json()
+                              
+                              if (data.success || response.ok) {
+                                setCurrentStep("booking-details")
+                              } else {
+                                setError(data.error || "Failed to lock slot. Please try again.")
+                              }
+                            } catch (err) {
+                              setError("Network error. Please try again.")
+                            } finally {
+                              setIsSubmitting(false)
+                            }
+                          }}
+                          disabled={isSubmitting}
+                          className="bg-green-700 hover:bg-green-800"
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Reserving Slot...
+                            </>
+                          ) : (
+                            "Continue to Booking Details"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {currentStep === "booking-details" && (

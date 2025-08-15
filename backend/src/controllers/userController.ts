@@ -4,7 +4,6 @@ import { hashPassword, comparePassword } from "../utils/hash";
 import { createAccessToken, verifyAccessToken } from "../utils/token";
 import { generateOTP } from "../services/otpGenerator";
 import { sendOtpMail } from "../services/otpSender";
-import { Redis } from "@upstash/redis";
 import getRedisClient from "../config/redis";
 
 export async function register(req: Request, res: Response) {
@@ -72,68 +71,140 @@ export async function login(req: Request, res: Response) {
 export async function createAppointment(req: Request, res: Response) {
   try {
     const token = req.token as string;
-    console.log(req.token)
     if (!token) {
       return res.status(401).json({ success: false, error: "Token missing" });
     }
 
-    let payload: { id: string, email: string };
+    let payload: { id: string; email: string };
     try {
-      payload = verifyAccessToken(token) as { id: string, email: string }
-    } catch (err) {
+      payload = verifyAccessToken(token) as { id: string; email: string };
+    } catch {
       return res.status(401).json({ success: false, error: "Invalid token" });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.id },
-    });
-
+    const user = await prisma.user.findUnique({ where: { id: payload.id } });
     if (!user) {
-      return res.status(404).json({ success: false,error: "User not found" });
+      return res.status(404).json({ success: false, error: "User not found" });
     }
 
     if (user.role !== "patient") {
-      return res.status(403).json({ success: false,error: "Only patients can book appointments" });
+      return res.status(403).json({ success: false, error: "Only patients can book appointments" });
     }
 
-    const { slotId, mode, consultationFee } = req.body;
+    const {
+      slotId,
+      mode,
+      consultationFee,
+      symptoms,
+      notes,
+      paymentStatus
+    } = req.body;
 
+    // Validation
     if (!slotId || typeof slotId !== "string") {
-      return res.status(400).json({ success: false,error: "Invalid or missing slotId" });
+      return res.status(400).json({ success: false, error: "Invalid or missing slotId" });
     }
     if (!mode || (mode !== "online" && mode !== "in_person")) {
-      return res.status(400).json({ success: false,error: "Invalid or missing mode" });
+      return res.status(400).json({ success: false, error: "Invalid or missing mode" });
     }
     if (
       consultationFee === undefined ||
       typeof consultationFee !== "number" ||
       consultationFee < 0
     ) {
-      return res.status(400).json({ success: false,error: "Invalid or missing consultationFee" });
+      return res.status(400).json({ success: false, error: "Invalid or missing consultationFee" });
     }
 
     const slot = await prisma.slot.findUnique({ where: { id: slotId } });
     if (!slot) {
-      return res.status(404).json({ success: false,error: "Slot not found" });
+      return res.status(404).json({ success: false, error: "Slot not found" });
     }
 
-    const appointment = await prisma.appointment.create({
-      data: {
-        slotId,
-        patientId: user.id,
-        doctorId: slot.doctorId,
-        status: "confirmed",
-        mode,
-        consultationFee,
-      },
+    const redis = getRedisClient();
+    const lockKey = `slotLock:${slotId}`;
+
+    const lockedBy = await redis.get(lockKey);
+    if (!lockedBy) {
+      return res.status(409).json({ success: false, error: "Slot is not locked or lock expired" });
+    }
+    if (lockedBy !== user.id) {
+      return res.status(409).json({ success: false, error: "Slot is locked by another user" });
+    }
+
+    const appointment = await prisma.$transaction(async (tx) => {
+      const createdAppointment = await tx.appointment.create({
+        data: {
+          slotId,
+          patientId: user.id,
+          doctorId: slot.doctorId,
+          status: "confirmed",
+          mode,
+          consultationFee,
+          symptoms: symptoms || null,
+          confirmedAt: new Date()
+        },
+      });
+
+      await redis.del(lockKey);
+
+      return createdAppointment;
     });
 
     res.status(201).json({ success: true, appointment });
   } catch (error) {
     console.error("Error creating appointment:", error);
-    res.status(500).json({ success: false,error: "Internal server error" });
+    res.status(500).json({ success: false, error: "Internal server error" });
   }
 }
+
+
+export async function lockSlot(req: Request, res: Response) {
+  try {
+    const token = req.token as string;
+    if (!token) {
+      return res.status(401).json({ success: false, error: "Token missing" });
+    }
+
+    let payload: { id: string; email: string };
+    try {
+      payload = verifyAccessToken(token) as { id: string; email: string };
+    } catch {
+      return res.status(401).json({ success: false, error: "Invalid token" });
+    }
+
+    const { slotId } = req.body;
+    if (!slotId || typeof slotId !== "string") {
+      return res.status(400).json({ success: false, error: "Invalid or missing slotId" });
+    }
+
+    const slot = await prisma.slot.findUnique({ where: { id: slotId } });
+    if (!slot) {
+      return res.status(404).json({ success: false, error: "Slot not found" });
+    }
+
+    const lockKey = `slotLock:${slotId}`;
+    const redis = getRedisClient();
+
+    const existingLock = await redis.get(lockKey);
+    if (existingLock) {
+      return res.status(409).json({ success: false, error: "Slot already locked" });
+    }
+
+    const ttlSeconds = 10*60
+
+    if (ttlSeconds <= 0) {
+      return res.status(400).json({ success: false, error: "Slot has already expired" });
+    }
+
+    await redis.set(lockKey, payload.id, { ex: ttlSeconds });
+
+    return res.status(200).json({ success: true, message: "Slot locked successfully" });
+  } catch (error) {
+    console.error("Error locking slot:", error);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+}
+
 
 export async function sendOtpToMail(req: Request, res: Response) {
   try {
@@ -146,10 +217,7 @@ export async function sendOtpToMail(req: Request, res: Response) {
 
     const otp = generateOTP(6);
 
-    const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL as string,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN as string,
-    })
+    const redis = getRedisClient()
 
     try {
       await redis.set(email, otp, { ex: 600 }); // 10 minutes

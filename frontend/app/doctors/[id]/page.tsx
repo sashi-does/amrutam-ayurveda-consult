@@ -283,7 +283,7 @@ export default function DoctorProfilePage() {
                               className="flex items-center justify-between text-sm p-2 bg-green-50 rounded"
                             >
                               <div>
-                                <div className="font-medium">{date}</div>
+                                <div className="font-medium">{date}</div>adasdasdasd 
                                 <div className="text-gray-600">{time}</div>
                               </div>
                               <Calendar className="h-4 w-4 text-green-700" />

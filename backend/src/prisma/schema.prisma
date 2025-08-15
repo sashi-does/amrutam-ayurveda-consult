@@ -75,20 +75,18 @@ model Doctor {
   updatedAt       DateTime      @updatedAt
 }
 
-
 model Slot {
-  id         String   @id @default(uuid())
-  doctor     Doctor   @relation(fields: [doctorId], references: [id])
-  doctorId   String
-  startTime  DateTime @db.Time
-  endTime    DateTime @db.Time
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  doctor    Doctor   @relation(fields: [doctorId], references: [id])
+  doctorId  String
+  startTime DateTime @db.Time
+  endTime   DateTime @db.Time
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   appointments Appointment[]
   slotLocks    SlotLock[]
 }
-
 
 model Appointment {
   id              String            @id @default(uuid())
@@ -112,8 +110,8 @@ model SlotLock {
   id        String   @id @default(uuid())
   slotId    String
   slot      Slot     @relation(fields: [slotId], references: [id])
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
+  patientId String
+  user      User     @relation(fields: [patientId], references: [id])
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
