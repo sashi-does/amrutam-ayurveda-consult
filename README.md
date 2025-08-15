@@ -35,7 +35,7 @@ A full-stack appointment booking platform for discovering Ayurvedic doctors, boo
 
 ### Clone Repository
 ```bash
-git clone [<repository-url>](https://github.com/sashi-does/amrutam-ayurveda-consult.git)
+git clone https://github.com/sashi-does/amrutam-ayurveda-consult.git
 ```
 
 ## Backend Setup
