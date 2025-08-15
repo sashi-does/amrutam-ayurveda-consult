@@ -6,6 +6,8 @@ import { generateOTP } from "../services/otpGenerator";
 import { sendOtpMail } from "../services/otpSender";
 import getRedisClient from "../config/redis";
 
+const redis = getRedisClient()
+
 export async function register(req: Request, res: Response) {
   try {
     const { firstName, lastName, email, password, phone, role } = req.body;
@@ -120,7 +122,6 @@ export async function createAppointment(req: Request, res: Response) {
       return res.status(404).json({ success: false, error: "Slot not found" });
     }
 
-    const redis = getRedisClient();
     const lockKey = `slotLock:${slotId}`;
 
     const lockedBy = await redis.get(lockKey);
@@ -157,7 +158,6 @@ export async function createAppointment(req: Request, res: Response) {
   }
 }
 
-
 export async function lockSlot(req: Request, res: Response) {
   try {
     const token = req.token as string;
@@ -183,20 +183,34 @@ export async function lockSlot(req: Request, res: Response) {
     }
 
     const lockKey = `slotLock:${slotId}`;
-    const redis = getRedisClient();
+
+    // CRITICAL DEBUG INFO
+    console.log("=== LOCK SLOT DEBUG ===");
+    console.log(`User email: ${payload.email}`);
+    console.log(`Slot ID: ${slotId}`);
+    console.log(`Lock key: ${lockKey}`);
+    console.log(`Are email and slotId the same? ${payload.email === slotId}`);
+    
+    // Check what keys exist in Redis before locking
+    const allKeys = await redis.keys("*");
+    console.log(`All Redis keys before locking:`, allKeys);
 
     const existingLock = await redis.get(lockKey);
     if (existingLock) {
       return res.status(409).json({ success: false, error: "Slot already locked" });
     }
 
-    const ttlSeconds = 10*60
-
-    if (ttlSeconds <= 0) {
-      return res.status(400).json({ success: false, error: "Slot has already expired" });
-    }
-
+    const ttlSeconds = 10 * 60;
     await redis.set(lockKey, payload.id, { ex: ttlSeconds });
+
+    // Verify the lock was set correctly
+    const verifyLock = await redis.get(lockKey);
+    console.log(`Lock verification - Key: ${lockKey}, Value: ${verifyLock}`);
+    
+    // Check all keys after locking
+    const allKeysAfter = await redis.keys("*");
+    console.log(`All Redis keys after locking:`, allKeysAfter);
+    console.log("=== END LOCK SLOT DEBUG ===");
 
     return res.status(200).json({ success: true, message: "Slot locked successfully" });
   } catch (error) {
@@ -205,26 +219,55 @@ export async function lockSlot(req: Request, res: Response) {
   }
 }
 
-
 export async function sendOtpToMail(req: Request, res: Response) {
   try {
     const token = req.token as string;
     const { email } = verifyAccessToken(token) as { email: string }
-    console.log("$$$$$ " + email)
     if (!email || typeof email !== "string") {
       return res.status(400).json({ success: false, error: "Valid email is required" });
     }
 
     const otp = generateOTP(6);
+    const otpKey = `otp:${email}`;
 
-    const redis = getRedisClient()
+    console.log("=== SEND OTP DEBUG ===");
+    console.log(`User email: ${email}`);
+    console.log(`OTP key: ${otpKey}`);
+    console.log(`OTP value: ${otp}`);
+    
+    const allKeysBefore = await redis.keys("*");
+    console.log(`All Redis keys BEFORE storing OTP:`, allKeysBefore);
+    
+    const slotLockPattern = await redis.keys("slotLock:*");
+    console.log(`Existing slot locks:`, slotLockPattern);
+    
+    for (const key of slotLockPattern) {
+      const value = await redis.get(key);
+      console.log(`Slot lock ${key} = ${value}`);
+    }
 
     try {
-      await redis.set(email, otp, { ex: 600 }); // 10 minutes
+      await redis.set(otpKey, otp, { ex: 600 }); 
+      console.log(`OTP stored with key: ${otpKey}`);
     } catch (redisErr) {
       console.error("Redis error:", redisErr);
       return res.status(500).json({ success: false, error: "Failed to store OTP. Please try again." });
     }
+
+    // Check what keys exist AFTER storing OTP
+    const allKeysAfter = await redis.keys("*");
+    console.log(`All Redis keys AFTER storing OTP:`, allKeysAfter);
+    
+    // Check if slot locks still exist
+    const slotLockPatternAfter = await redis.keys("slotLock:*");
+    console.log(`Slot locks after OTP storage:`, slotLockPatternAfter);
+    
+    // Check the values of slot locks after OTP storage
+    for (const key of slotLockPatternAfter) {
+      const value = await redis.get(key);
+      console.log(`Slot lock after OTP ${key} = ${value}`);
+    }
+    console.log("=== END SEND OTP DEBUG ===");
 
     const result = await sendOtpMail(email, otp);
     console.log(result);
@@ -234,7 +277,7 @@ export async function sendOtpToMail(req: Request, res: Response) {
 
     return res.status(200).json({ success: true, message: result.message });
   } catch (err) {
-    console.error("verifyAccount error:", err);
+    console.error("sendOtpToMail error:", err);
     res.status(500).json({ success: false, error: "Internal server error" });
   }
 }
@@ -251,14 +294,24 @@ export async function verify(req: Request, res: Response) {
     if (!otp) 
       return res.status(400).json({ success: false, error: "OTP is required" });
 
-    const redis = getRedisClient()
+    const otpKey = `otp:${email}`;
+
+    // CRITICAL DEBUG INFO
+    console.log("=== VERIFY OTP DEBUG ===");
+    console.log(`User email: ${email}`);
+    console.log(`OTP key: ${otpKey}`);
+    console.log(`Received OTP: ${otp}`);
+    
+    // Check what keys exist before verification
+    const allKeysBefore = await redis.keys("*");
+    console.log(`All Redis keys before verification:`, allKeysBefore);
 
     let storedOtp: string | null;
     try {
-      storedOtp = await redis.get(email);
+      storedOtp = await redis.get(otpKey);
       if(!storedOtp) throw new Error("OTP is expired");
-      console.log("Redis otp: " + storedOtp)
-      console.log("User otp: " + otp.length)
+      console.log("Redis stored OTP: " + storedOtp);
+      console.log("User provided OTP: " + otp);
     } catch (redisErr) {
       console.error("Redis error:", redisErr);
       return res.status(500).json({ error: "Failed to verify OTP. Please try again." });
@@ -271,23 +324,25 @@ export async function verify(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: "Invalid OTP. Please try again." });
 
     try {
-      await redis.del(email);
+      await redis.del(otpKey);
+      console.log(`Deleted OTP key: ${otpKey}`);
     } catch (delErr) {
       console.warn("Failed to delete OTP from Redis:", delErr);
     }
 
+    // Check what keys exist after OTP deletion
+    const allKeysAfter = await redis.keys("*");
+    console.log(`All Redis keys after OTP deletion:`, allKeysAfter);
+    console.log("=== END VERIFY OTP DEBUG ===");
+
     try {
       await prisma.user.update({
-        where: {
-          email
-        },
-        data: {
-          isVerified: true
-        }
+        where: { email },
+        data: { isVerified: true }
       })
     } catch(error) {
       console.error("Error verifying user:", error);
-      res.status(500).json({ success: false, error: "Failed to verify user" });
+      return res.status(500).json({ success: false, error: "Failed to verify user" });
     }
 
     return res.status(200).json({ success: true, message: "OTP verified successfully!" });
