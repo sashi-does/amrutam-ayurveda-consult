@@ -59,7 +59,7 @@ interface Slot {
 interface BookingData {
   doctorId: string
   slotId: string
-  appointmentDateTime: string // Changed to string for ISO date
+  appointmentDateTime: string 
   status: string
   mode: "online" | "in_person"
   consultationFee: number
@@ -71,7 +71,6 @@ type BookingStep = "slot-selection" | "otp-verification" | "booking-details" | "
 
 export default function BookingPage() {
   const params = useParams()
-  const router = useRouter()
   const doctorId = params.doctorId as string
 
   const [currentStep, setCurrentStep] = useState<BookingStep>("slot-selection")
@@ -290,22 +289,18 @@ export default function BookingPage() {
     setError("")
 
     try {
-      // Create proper datetime in IST by combining selectedDate with slot time
       let appointmentDateTime = bookingData.appointmentDateTime
       
       if (selectedSlot) {
         const slotTime = new Date(selectedSlot.startTime)
         const appointmentDate = new Date(selectedDate)
         
-        // If slot time is just time (1970 date), combine with selected date
         if (slotTime.getFullYear() === 1970) {
           appointmentDate.setHours(slotTime.getHours(), slotTime.getMinutes(), slotTime.getSeconds())
         } else {
-          // Use slot's datetime directly if it's a proper datetime
           appointmentDate.setTime(slotTime.getTime())
         }
         
-        // Create IST datetime string manually (without timezone conversion)
         const year = appointmentDate.getFullYear()
         const month = String(appointmentDate.getMonth() + 1).padStart(2, '0')
         const day = String(appointmentDate.getDate()).padStart(2, '0')
@@ -316,13 +311,10 @@ export default function BookingPage() {
         appointmentDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000+05:30`
       }
 
-      // Prepare the booking data with IST datetime
       const appointmentData = {
         ...bookingData,
         appointmentDateTime,
-        // Also include the date separately in IST
-        date: appointmentDateTime.split('T')[0], // YYYY-MM-DD format from the IST datetime
-        // Include the time separately if your backend needs it
+        date: appointmentDateTime.split('T')[0], 
         time: appointmentDateTime
       }
 

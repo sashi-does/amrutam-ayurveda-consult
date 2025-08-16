@@ -31,9 +31,11 @@ import {
   AlertCircle,
 } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { makeAuthenticatedRequest, getUser, logout } from "@/lib/auth"
 import { AuthGuard } from "@/components/auth-guard"
+import { format } from "date-fns"
+
+
 
 interface Appointment {
   id: string
@@ -147,13 +149,14 @@ export default function DashboardPage() {
     setRescheduleError("")
     
     try {
-      const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/${doctorId}/slots?exclude_appointment=${appointmentId}`
+      const formattedDate = format(new Date(), "yyyy-MM-dd HH:mm:ss");
+     
+      const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}&date=${formattedDate}`
       const response = await makeAuthenticatedRequest(url)
       
       if (response.ok) {
         const data = await response.json()
         if (data.success && data.slots) {
-          // Filter out already booked slots and past slots
           const now = new Date()
           const availableSlots = data.slots.filter((slot: AvailableSlot) => 
             !slot.isBooked && new Date(slot.startTime) > now
