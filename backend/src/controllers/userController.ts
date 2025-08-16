@@ -5,6 +5,7 @@ import { createAccessToken, verifyAccessToken } from "../utils/token";
 import { generateOTP } from "../services/otpGenerator";
 import { sendOtpMail } from "../services/otpSender";
 import getRedisClient from "../config/redis";
+import { addMinutes } from "date-fns";
 import { format, toZonedTime } from "date-fns-tz";
 
 const redis = getRedisClient()
@@ -100,12 +101,11 @@ export async function createAppointment(req: Request, res: Response) {
       mode,
       consultationFee,
       symptoms,
-      appointmentDateTime, // incoming string
+      appointmentDateTime, 
     } = req.body;
 
     console.log("Appointment Time (input): " + appointmentDateTime);
 
-    // Validation
     if (!slotId || typeof slotId !== "string") {
       return res.status(400).json({ success: false, error: "Invalid or missing slotId" });
     }
@@ -123,7 +123,6 @@ export async function createAppointment(req: Request, res: Response) {
       return res.status(400).json({ success: false, error: "Invalid or missing appointmentDateTime" });
     }
 
-    // Parse input and convert to IST Date
     const parsedDate = new Date(appointmentDateTime);
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ success: false, error: "Invalid appointmentDateTime format" });
@@ -131,10 +130,8 @@ export async function createAppointment(req: Request, res: Response) {
 
     const istDate = toZonedTime(parsedDate, IST_TIMEZONE);
 
-    // Format for logs/response
     const formattedIST = format(istDate, "yyyy-MM-dd HH:mm:ss", { timeZone: IST_TIMEZONE });
 
-    // Ensure appointment is in the future
     if (istDate <= new Date()) {
       return res.status(400).json({ success: false, error: "Appointment must be scheduled for a future date and time" });
     }
@@ -153,7 +150,6 @@ export async function createAppointment(req: Request, res: Response) {
       return res.status(409).json({ success: false, error: "Slot is locked by another user" });
     }
 
-    // Check if there's already an appointment for this slot
     const existingAppointment = await prisma.appointment.findFirst({
       where: {
         slotId: slotId,
@@ -165,7 +161,7 @@ export async function createAppointment(req: Request, res: Response) {
       return res.status(409).json({ success: false, error: "Slot is already booked" });
     }
 
-    const appointment = await prisma.$transaction(async (tx) => {
+    const [appointment, slotLock] = await prisma.$transaction(async (tx) => {
       const createdAppointment = await tx.appointment.create({
         data: {
           slotId,
@@ -173,7 +169,6 @@ export async function createAppointment(req: Request, res: Response) {
           doctorId: slot.doctorId,
           status: "confirmed",
           mode,
-          // ✅ Save as Date object (Prisma requires DateTime, not string)
           appointmentDateTime: istDate,
           consultationFee,
           symptoms: symptoms || null,
@@ -185,10 +180,19 @@ export async function createAppointment(req: Request, res: Response) {
           slot: { select: { id: true, startTime: true, endTime: true } }
         }
       });
-
+      const createdSlotLock = await tx.slotLock.create({
+        data: {
+          slotId: slot.id,
+          patientId: user.id,
+          expiresAt: addMinutes(istDate, 15),
+        }
+      });
+      
       await redis.del(lockKey);
-      return createdAppointment;
+      return [createdAppointment, createdSlotLock];
     });
+
+    console.log(slotLock)
 
     console.log("Appointment created successfully:", {
       appointmentId: appointment.id,
@@ -436,5 +440,53 @@ export async function getAppointments(req: Request, res: Response) {
   } catch (error) {
     console.error("Error fetching appointments:", error);
     res.status(500).json({ success: false, error: "Internal server error" });
+  }
+}
+
+export async function rescheduleAppointment(req: Request, res: Response) {
+  try {
+    const { appointmentId } = req.params;
+    const { newAppointmentDateTime, slotId } = req.body;
+
+    if (!newAppointmentDateTime) {
+      return res.status(400).json({ success: false, message: "New appointment date/time is required" });
+    }
+    
+    const utcDate = toZonedTime(newAppointmentDateTime, IST_TIMEZONE);
+
+    const updatedAppointment = await prisma.$transaction(async (tx) => {
+      const appointment = await tx.appointment.update({
+        where: { id: appointmentId as string },
+        data: {
+          appointmentDateTime: utcDate,
+          slotId,
+          status: "rescheduled",
+          updatedAt: new Date()
+        },
+        include: {
+          patient: {
+            select: { id: true, firstName: true, lastName: true, email: true, phone: true }
+          },
+          doctor: {
+            select: {
+              id: true,
+              specialization: true,
+              user: { select: { firstName: true, lastName: true, email: true } }
+            }
+          },
+          slot: { select: { id: true, startTime: true, endTime: true } }
+        }
+      });
+
+      const istDate = new Date(appointment.appointmentDateTime as Date);
+      const formattedIST = format(istDate, "yyyy-MM-dd HH:mm:ss", { timeZone: IST_TIMEZONE });
+
+      return { ...appointment, appointmentDateTime: formattedIST };
+    });
+
+    return res.status(200).json({ success: true, appointment: updatedAppointment });
+  } catch (error: any) {
+    console.error("Error rescheduling appointment:", error);
+    return res.status(500).json({ success: false, message: "Failed to reschedule appointment" });
   }
 }

@@ -9,6 +9,7 @@ import { Star, MapPin, Video, Clock, Award, Calendar, ArrowLeft, Loader2, Leaf }
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { isAuthenticated } from "@/lib/auth"
+import { format } from "date-fns"
 
 interface Doctor {
   id: string
@@ -80,7 +81,8 @@ export default function DoctorProfilePage() {
 
   const fetchDoctorSlots = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
+      const formattedDate = format(new Date(), "yyyy-MM-dd")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}&date=${formattedDate}`)
       const data = await response.json()
 
       if (data.success && data.slots) {
@@ -106,8 +108,8 @@ export default function DoctorProfilePage() {
     return ["Not specified"]
   }
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString)
+  const formatDateTime = () => {
+    const date = new Date()
     return {
       date: date.toLocaleDateString("en-IN", {
         weekday: "short",
@@ -276,14 +278,14 @@ export default function DoctorProfilePage() {
                       <h4 className="font-medium text-gray-900 mb-2">Available Slots</h4>
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {slots.slice(0, 3).map((slot) => {
-                          const { date, time } = formatDateTime(slot.startTime)
+                          const { date, time } = formatDateTime()
                           return (
                             <div
                               key={slot.id}
                               className="flex items-center justify-between text-sm p-2 bg-green-50 rounded"
                             >
                               <div>
-                                <div className="font-medium">{date}</div>adasdasdasd 
+                                <div className="font-medium">{date}</div>
                                 <div className="text-gray-600">{time}</div>
                               </div>
                               <Calendar className="h-4 w-4 text-green-700" />

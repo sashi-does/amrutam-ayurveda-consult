@@ -69,7 +69,6 @@ export default function DoctorsPage() {
     setError("")
 
     try {
-      // Fetch doctors for different specializations to get a variety
       const specializations = ["Cardiology", "Ayurvedic Dermatology", "Panchakarma Specialist"]
       const modes = ["online", "in_person"]
       console.log(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/all?specialisation`,)
@@ -86,13 +85,11 @@ export default function DoctorsPage() {
               allDoctors = [...allDoctors, ...data.doctors]
             }
           } catch (err) {
-            // Continue with other requests even if one fails
             console.warn(`Failed to fetch doctors for ${spec} - ${mode}`)
           }
         }
       }
 
-      // Remove duplicates based on doctor ID
       const uniqueDoctors = allDoctors.filter(
         (doctor, index, self) => index === self.findIndex((d) => d.id === doctor.id),
       )

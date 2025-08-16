@@ -29,6 +29,7 @@ import {
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { makeAuthenticatedRequest } from "@/lib/auth"
+import { format } from "date-fns"
 
 interface Doctor {
   id: string
@@ -87,7 +88,7 @@ export default function BookingPage() {
     doctorId,
     slotId: "",
     status: "pending",
-    appointmentDateTime: "", // Changed to empty string
+    appointmentDateTime: "",
     mode: "online",
     consultationFee: 0,
     symptoms: "",
@@ -103,7 +104,7 @@ export default function BookingPage() {
     if (doctorId) {
       fetchDoctorAndSlots()
     }
-  }, [doctorId])
+  }, [doctorId, selectedDate])
 
   useEffect(() => {
     let interval: NodeJS.Timeout
@@ -111,7 +112,6 @@ export default function BookingPage() {
       interval = setInterval(() => {
         setSlotLockTimer((prev) => {
           if (prev <= 1) {
-            // Timer expired - reset selected slot and show error
             setSelectedSlot(null)
             setError("Slot reservation has expired. Please select a slot again.")
             setCurrentStep("slot-selection")
@@ -146,8 +146,8 @@ export default function BookingPage() {
           return
         }
       }
-
-      const slotsResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}`)
+      const formattedDate = format(new Date(selectedDate), "yyyy-MM-dd")
+      const slotsResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/slot/all?doctorId=${doctorId}&date=${formattedDate}`)
       const slotsData = await slotsResponse.json()
       console.log(slotsData.slots)
 
@@ -164,19 +164,15 @@ export default function BookingPage() {
   const handleSlotSelection = (slot: Slot) => {
     setSelectedSlot(slot)
     
-    // Combine selectedDate with slot's time to create proper datetime in IST
     const slotDateTime = new Date(slot.startTime)
     const combinedDateTime = new Date(selectedDate)
     
-    // If slot.startTime is just time (like "09:45:00"), combine with selected date
     if (slotDateTime.getFullYear() === 1970) {
       combinedDateTime.setHours(slotDateTime.getHours(), slotDateTime.getMinutes(), slotDateTime.getSeconds())
     } else {
-      // If slot.startTime is already a full datetime, use it directly
       combinedDateTime.setTime(slotDateTime.getTime())
     }
     
-    // Create IST datetime string manually (don't add offset, just format as IST)
     const year = combinedDateTime.getFullYear()
     const month = String(combinedDateTime.getMonth() + 1).padStart(2, '0')
     const day = String(combinedDateTime.getDate()).padStart(2, '0')
@@ -241,6 +237,10 @@ export default function BookingPage() {
     compareDate.setHours(0, 0, 0, 0)
     return compareDate < today
   }
+  console.log("****88*")
+  console.log(slots)
+  console.log("*****")
+
 
   const filteredSlots = slots.filter(slot => {
     const slotDate = new Date(slot.startTime)
@@ -671,7 +671,7 @@ export default function BookingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="h-full p-6">
-                  {filteredSlots.length === 0 ? (
+                  {slots.length === 0 ? (
                     <div className="text-center py-8 h-full flex flex-col justify-center">
                       <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No slots available</h3>
@@ -687,7 +687,7 @@ export default function BookingPage() {
                       {/* Scrollable slots area - Fixed height */}
                       <div className={`${selectedSlot ? 'h-1/2' : 'h-full'} overflow-y-auto mb-4`}>
                         <div className="grid grid-cols-2 gap-3">
-                          {filteredSlots.map((slot) => {
+                          {slots.map((slot) => {
                             const { time } = formatDateTime(slot.startTime)
                             const isSelected = selectedSlot?.id === slot.id
 
@@ -883,7 +883,12 @@ export default function BookingPage() {
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         <div className="flex items-center">
                           <Calendar className="h-4 w-4 mr-1" />
-                          {formatDateTime(selectedSlot.startTime).date}
+                          {selectedDate.toLocaleDateString('en-IN', {
+                                  weekday: 'long',
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric'
+                                })}
                         </div>
                         <div className="flex items-center">
                           <Clock className="h-4 w-4 mr-1" />

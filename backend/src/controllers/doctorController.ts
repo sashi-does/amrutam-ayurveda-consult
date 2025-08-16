@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { comparePassword, hashPassword } from "../utils/hash";
 import { prisma } from "../lib/prisma";
 import { createAccessToken } from "../utils/token";
+import { format } from "date-fns-tz";
 
 // For Doctor
 export async function registerDoctor(req: Request, res: Response) {
@@ -203,30 +204,73 @@ export async function getFilteredDoctors(req: Request, res: Response) {
 }
 
 export async function getDoctorSlots(req: Request, res: Response) {
-    try {
-      const { doctorId } = req.query;
-      console.log(doctorId)
-  
-      if (!doctorId) {
-        return res.status(400).json({ success: false, message: "doctorId is required" });
-      }
-  
-      const slots = await prisma.slot.findMany({
-        where: {
-          doctorId: doctorId as string,
-        },
-        orderBy: {
-          startTime: "asc",
-        },
-      });
-  
-      return res.status(200).json({
-        success: true,
-        doctorId,
-        slots,
-      });
-    } catch (error) {
-      console.error("Error fetching doctor slots:", error);
-      return res.status(500).json({ success: false, message: "Internal server error" });
+  try {
+    const { doctorId, date } = req.query;
+    if (!doctorId) {
+      return res.status(400).json({ success: false, message: "doctorId is required" });
     }
+    if (!date || typeof date !== "string") {
+      return res.status(400).json({ success: false, message: "date is required in YYYY-MM-DD format" });
+    }
+
+    const slots = await prisma.slot.findMany({
+      where: { doctorId: doctorId as string },
+      orderBy: { startTime: "asc" },
+    });
+
+    if (!slots.length) {
+      return res.status(200).json({ success: true, doctorId, date, slots: [] });
+    }
+
+    const slotsWithDate = slots.map((s) => {
+      const startTime = new Date(`${date}T${format(s.startTime, "HH:mm:ss")}`);
+      const endTime = new Date(`${date}T${format(s.endTime, "HH:mm:ss")}`);
+      return { ...s, startTime, endTime };
+    });
+
+    const activeLocks = await prisma.slotLock.findMany({
+      where: {
+        slotId: { in: slots.map((s) => s.id) },
+        expiresAt: { gt: new Date() },
+      },
+      select: { slotId: true },
+    });
+    const lockedSlotIds = new Set(activeLocks.map((l) => l.slotId));
+
+    const bookedAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: doctorId as string,
+        appointmentDateTime: {
+          gte: new Date(`${date}T00:00:00`),
+          lt: new Date(`${date}T23:59:59`),
+        },
+      },
+      select: { slotId: true, appointmentDateTime: true },
+    });
+
+    const bookedSlotIds = new Set(
+      bookedAppointments
+        .filter((b) => {
+          const appointmentDate = format(b.appointmentDateTime as Date, "yyyy-MM-dd");
+          return appointmentDate === date;
+        })
+        .map((b) => b.slotId)
+    );
+
+    const availableSlots = slotsWithDate.filter(
+      (s) => !lockedSlotIds.has(s.id) && !bookedSlotIds.has(s.id)
+    );
+
+    return res.status(200).json({
+      success: true,
+      doctorId,
+      date,
+      slots: availableSlots,
+    });
+  } catch (error) {
+    console.error("Error fetching doctor slots:", error);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
 }
+
+

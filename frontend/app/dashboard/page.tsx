@@ -7,12 +7,15 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { DailyHealthProverb } from "@/components/daily-health-proverb"
 import { HealthTipWidget } from "@/components/health-tip-widget"
 import {
   Calendar,
   Clock,
-  UserIcon,
+  User,
   Video,
   MapPin,
   Star,
@@ -79,6 +82,14 @@ interface DashboardUser {
   lastName?: string
 }
 
+interface AvailableSlot {
+  id: string
+  doctorId: string
+  startTime: string
+  endTime: string
+  isBooked: boolean
+}
+
 export default function DashboardPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([])
@@ -86,6 +97,15 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [activeFilter, setActiveFilter] = useState("all")
+  
+  // Reschedule modal state
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [availableSlots, setAvailableSlots] = useState<AvailableSlot[]>([])
+  const [selectedNewSlot, setSelectedNewSlot] = useState("")
+  const [isRescheduling, setIsRescheduling] = useState(false)
+  const [rescheduleError, setRescheduleError] = useState("")
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
 
   useEffect(() => {
     const userData = getUser()
@@ -119,6 +139,92 @@ export default function DashboardPage() {
       setError("Network error. Please try again.")
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchAvailableSlots = async (doctorId: string, appointmentId: string) => {
+    setIsLoadingSlots(true)
+    setRescheduleError("")
+    
+    try {
+      const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/doctors/${doctorId}/slots?exclude_appointment=${appointmentId}`
+      const response = await makeAuthenticatedRequest(url)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.slots) {
+          // Filter out already booked slots and past slots
+          const now = new Date()
+          const availableSlots = data.slots.filter((slot: AvailableSlot) => 
+            !slot.isBooked && new Date(slot.startTime) > now
+          )
+          setAvailableSlots(availableSlots)
+        } else {
+          setAvailableSlots([])
+        }
+      } else {
+        setRescheduleError("Failed to load available slots")
+        setAvailableSlots([])
+      }
+    } catch (err) {
+      setRescheduleError("Network error while loading slots")
+      setAvailableSlots([])
+    } finally {
+      setIsLoadingSlots(false)
+    }
+  }
+
+  const handleRescheduleClick = (appointment: Appointment) => {
+    setSelectedAppointment(appointment)
+    setSelectedNewSlot("")
+    setRescheduleError("")
+    setIsRescheduleModalOpen(true)
+    fetchAvailableSlots(appointment.doctorId, appointment.id)
+  }
+
+  const handleRescheduleSubmit = async () => {
+    if (!selectedAppointment || !selectedNewSlot) {
+      setRescheduleError("Please select a new time slot")
+      return
+    }
+
+    setIsRescheduling(true)
+    setRescheduleError("")
+
+    try {
+      const url = `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/appointments/${selectedAppointment.id}/reschedule`
+      const response = await makeAuthenticatedRequest(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          newSlotId: selectedNewSlot
+        })
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          // Update the appointments list
+          await fetchAppointments()
+          setIsRescheduleModalOpen(false)
+          setSelectedAppointment(null)
+          setSelectedNewSlot("")
+          
+          // You might want to show a success message here
+          setError("")
+        } else {
+          setRescheduleError(data.message || "Failed to reschedule appointment")
+        }
+      } else {
+        const errorData = await response.json()
+        setRescheduleError(errorData.message || "Failed to reschedule appointment")
+      }
+    } catch (err) {
+      setRescheduleError("Network error. Please try again.")
+    } finally {
+      setIsRescheduling(false)
     }
   }
 
@@ -202,13 +308,47 @@ export default function DashboardPage() {
     }
   }
 
+  const formatSlotOption = (slot: AvailableSlot) => {
+    const start = new Date(slot.startTime)
+    const end = new Date(slot.endTime)
+    
+    const dateStr = start.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    })
+    
+    const timeStr = `${start.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })} - ${end.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })}`
+    
+    return `${dateStr}, ${timeStr}`
+  }
+
   const canReschedule = (appointment: Appointment) => {
     const appointmentTime = new Date(appointment.slot.startTime)
     const now = new Date()
     const timeDiff = appointmentTime.getTime() - now.getTime()
     const hoursDiff = timeDiff / (1000 * 3600)
 
-    return hoursDiff > 24 && (appointment.status === "confirmed" || appointment.status === "pending")
+    // For testing, let's make it more lenient - allow reschedule if appointment is in the future
+    // and status is confirmed or pending
+    console.log('Reschedule check:', {
+      appointmentId: appointment.id,
+      appointmentTime: appointmentTime.toISOString(),
+      now: now.toISOString(),
+      hoursDiff,
+      status: appointment.status,
+      canReschedule: hoursDiff > 1 && (appointment.status === "confirmed" || appointment.status === "pending")
+    })
+
+    return hoursDiff > 1 && (appointment.status === "confirmed" || appointment.status === "pending")
   }
 
   const getUpcomingAppointments = () => {
@@ -318,7 +458,7 @@ export default function DashboardPage() {
                     <p className="text-sm text-gray-600 mb-1">Total Appointments</p>
                     <p className="text-3xl font-bold text-gray-700">{appointments.length}</p>
                   </div>
-                  <UserIcon className="h-8 w-8 text-gray-700" />
+                  <User className="h-8 w-8 text-gray-700" />
                 </div>
               </CardContent>
             </Card>
@@ -451,20 +591,21 @@ export default function DashboardPage() {
                                       </div>
                                       <div className="space-y-2">
                                         {appointment.status === "confirmed" && appointment.mode === "online" && (
-                                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white w-full">
                                             <Video className="h-3 w-3 mr-1" />
                                             Join Call
                                           </Button>
                                         )}
-                                        {canReschedule(appointment) && (
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent"
-                                          >
-                                            Reschedule
-                                          </Button>
-                                        )}
+                                        {/* Always show reschedule for testing - remove this condition later */}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent w-full"
+                                          onClick={() => handleRescheduleClick(appointment)}
+                                        >
+                                          <Calendar className="h-3 w-3 mr-1" />
+                                          Reschedule
+                                        </Button>
                                       </div>
                                     </div>
                                   </div>
@@ -486,6 +627,77 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {/* Reschedule Modal */}
+        <Dialog open={isRescheduleModalOpen} onOpenChange={setIsRescheduleModalOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Reschedule Appointment</DialogTitle>
+              <DialogDescription>
+                Select a new time slot for your appointment with Dr. {selectedAppointment?.slot.doctor.userId}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4">
+              {rescheduleError && (
+                <Alert className="border-red-200 bg-red-50">
+                  <AlertDescription className="text-red-700">{rescheduleError}</AlertDescription>
+                </Alert>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="new-slot">Select New Time Slot</Label>
+                {isLoadingSlots ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-green-700" />
+                    <span className="ml-2 text-sm text-gray-600">Loading available slots...</span>
+                  </div>
+                ) : availableSlots.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-600">No available slots found for this doctor.</p>
+                  </div>
+                ) : (
+                  <Select value={selectedNewSlot} onValueChange={setSelectedNewSlot}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a new time slot" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSlots.map((slot) => (
+                        <SelectItem key={slot.id} value={slot.id}>
+                          {formatSlotOption(slot)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+            
+            <DialogFooter className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsRescheduleModalOpen(false)}
+                disabled={isRescheduling}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRescheduleSubmit}
+                disabled={isRescheduling || !selectedNewSlot || isLoadingSlots}
+                className="bg-green-700 hover:bg-green-800"
+              >
+                {isRescheduling ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Rescheduling...
+                  </>
+                ) : (
+                  "Confirm Reschedule"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AuthGuard>
   )
