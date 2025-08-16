@@ -42,7 +42,7 @@ interface Appointment {
   consultationFee: string
   symptoms: string | null
   meetingLink: string | null
-  confirmedAt: string | null
+  appointmentDateTime: string | null,
   createdAt: string
   updatedAt: string
   slot: {
@@ -378,7 +378,7 @@ export default function DashboardPage() {
                       ) : (
                         <div className="space-y-4">
                           {filteredAppointments.map((appointment) => {
-                            const { date, time } = formatDateTime(appointment.slot.startTime)
+                            const { date, time } = formatDateTime(appointment.appointmentDateTime as string)
                             const doctor = appointment.slot.doctor
 
                             return (

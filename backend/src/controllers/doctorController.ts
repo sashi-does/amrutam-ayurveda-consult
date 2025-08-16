@@ -229,5 +229,4 @@ export async function getDoctorSlots(req: Request, res: Response) {
       console.error("Error fetching doctor slots:", error);
       return res.status(500).json({ success: false, message: "Internal server error" });
     }
-  }
-  
+}

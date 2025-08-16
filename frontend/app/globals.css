@@ -115,6 +115,10 @@
   --font-sans: var(--font-dm-sans);
 }
 
+Button {
+  cursor: pointer;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Star, MapPin, Video, User, Clock, Search, Filter, Loader2, Leaf } from "lucide-react"
+import { Star, MapPin, Video, User, Clock, Search, Filter, Loader2, Leaf, LogOut, Bell, Settings } from "lucide-react"
 import Link from "next/link"
+import { logout } from "@/lib/auth"
 
 interface Doctor {
   id: string
@@ -107,7 +108,6 @@ export default function DoctorsPage() {
   const filterDoctors = () => {
     let filtered = doctors
 
-    // Filter by search term (name or specialization)
     if (searchTerm) {
       filtered = filtered.filter(
         (doctor) =>
@@ -116,12 +116,10 @@ export default function DoctorsPage() {
       )
     }
 
-    // Filter by specialization
     if (selectedSpecialization !== "All Specializations") {
       filtered = filtered.filter((doctor) => doctor.specialization === selectedSpecialization)
     }
 
-    // Filter by mode
     if (selectedMode !== "all") {
       filtered = filtered.filter((doctor) => doctor.mode === selectedMode)
     }
@@ -146,31 +144,41 @@ export default function DoctorsPage() {
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-white">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2">
-            <Leaf className="h-8 w-8 text-green-700" />
-            <span className="text-2xl font-bold text-green-700">Amrutam</span>
-          </Link>
-          <nav className="hidden md:flex items-center space-x-6">
-            <Link href="/" className="text-gray-600 hover:text-green-700 transition-colors">
-              Home
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <Link href="/" className="flex items-center space-x-2">
+              <Leaf className="h-8 w-8 text-green-700" />
+              <span className="text-2xl font-bold text-green-700">Amrutam</span>
             </Link>
-            <Link href="/doctors" className="text-green-700 font-medium">
-              Find Doctors
-            </Link>
-            <Link href="/dashboard" className="text-gray-600 hover:text-green-700 transition-colors">
-              Dashboard
-            </Link>
-          </nav>
-          <div className="flex items-center space-x-3">
-            <Link href="/auth/signin">
-              <Button variant="outline" className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent">
-                Sign In
+            <nav className="hidden md:flex items-center space-x-6">
+              <Link href="/" className="text-gray-600 hover:text-green-700 transition-colors">
+                Home
+              </Link>
+              <Link href="/doctors" className="text-gray-600 hover:text-green-700 transition-colors">
+                Find Doctors
+              </Link>
+              <Link href="/dashboard" className="text-green-700 font-medium">
+                Dashboard
+              </Link>
+            </nav>
+            <div className="flex items-center space-x-3">
+              <Button variant="ghost" size="sm">
+                <Bell className="h-4 w-4" />
               </Button>
-            </Link>
+              <Button variant="ghost" size="sm">
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => logout()}
+                className="border-red-200 text-red-600 hover:bg-red-50 bg-transparent"
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Logout
+              </Button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
       <div className="container mx-auto px-4 py-8">
         {/* Page Header */}

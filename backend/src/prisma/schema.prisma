@@ -89,21 +89,21 @@ model Slot {
 }
 
 model Appointment {
-  id              String            @id @default(uuid())
-  patientId       String
-  patient         User              @relation(fields: [patientId], references: [id])
-  doctorId        String
-  doctor          Doctor            @relation(fields: [doctorId], references: [id])
-  slotId          String
-  slot            Slot              @relation(fields: [slotId], references: [id])
-  status          AppointmentStatus
-  mode            Mode
-  consultationFee Decimal
-  symptoms        String?
-  meetingLink     String?
-  confirmedAt     DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                  String            @id @default(uuid())
+  patientId           String
+  patient             User              @relation(fields: [patientId], references: [id])
+  doctorId            String
+  doctor              Doctor            @relation(fields: [doctorId], references: [id])
+  slotId              String
+  slot                Slot              @relation(fields: [slotId], references: [id])
+  status              AppointmentStatus
+  mode                Mode
+  consultationFee     Decimal
+  symptoms            String?
+  meetingLink         String?
+  appointmentDateTime DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 }
 
 model SlotLock {

@@ -58,6 +58,7 @@ interface Slot {
 interface BookingData {
   doctorId: string
   slotId: string
+  appointmentDateTime: string // Changed to string for ISO date
   status: string
   mode: "online" | "in_person"
   consultationFee: number
@@ -65,7 +66,7 @@ interface BookingData {
   meetingLink?: string
 }
 
-type BookingStep = "slot-selection" | "booking-details" | "otp-verification" | "confirmation"
+type BookingStep = "slot-selection" | "otp-verification" | "booking-details" | "confirmation"
 
 export default function BookingPage() {
   const params = useParams()
@@ -86,6 +87,7 @@ export default function BookingPage() {
     doctorId,
     slotId: "",
     status: "pending",
+    appointmentDateTime: "", // Changed to empty string
     mode: "online",
     consultationFee: 0,
     symptoms: "",
@@ -107,7 +109,16 @@ export default function BookingPage() {
     let interval: NodeJS.Timeout
     if (slotLockTimer > 0) {
       interval = setInterval(() => {
-        setSlotLockTimer((prev) => prev - 1)
+        setSlotLockTimer((prev) => {
+          if (prev <= 1) {
+            // Timer expired - reset selected slot and show error
+            setSelectedSlot(null)
+            setError("Slot reservation has expired. Please select a slot again.")
+            setCurrentStep("slot-selection")
+            return 0
+          }
+          return prev - 1
+        })
       }, 1000)
     }
     return () => clearInterval(interval)
@@ -152,11 +163,36 @@ export default function BookingPage() {
 
   const handleSlotSelection = (slot: Slot) => {
     setSelectedSlot(slot)
-    setBookingData((prev) => ({ ...prev, slotId: slot.id }))
-    setSlotLockTimer(600) 
+    
+    // Combine selectedDate with slot's time to create proper datetime in IST
+    const slotDateTime = new Date(slot.startTime)
+    const combinedDateTime = new Date(selectedDate)
+    
+    // If slot.startTime is just time (like "09:45:00"), combine with selected date
+    if (slotDateTime.getFullYear() === 1970) {
+      combinedDateTime.setHours(slotDateTime.getHours(), slotDateTime.getMinutes(), slotDateTime.getSeconds())
+    } else {
+      // If slot.startTime is already a full datetime, use it directly
+      combinedDateTime.setTime(slotDateTime.getTime())
+    }
+    
+    // Create IST datetime string manually (don't add offset, just format as IST)
+    const year = combinedDateTime.getFullYear()
+    const month = String(combinedDateTime.getMonth() + 1).padStart(2, '0')
+    const day = String(combinedDateTime.getDate()).padStart(2, '0')
+    const hours = String(combinedDateTime.getHours()).padStart(2, '0')
+    const minutes = String(combinedDateTime.getMinutes()).padStart(2, '0')
+    const seconds = String(combinedDateTime.getSeconds()).padStart(2, '0')
+    
+    const istString = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000+05:30`
+    
+    setBookingData((prev) => ({
+      ...prev,
+      slotId: slot.id,
+      appointmentDateTime: istString
+    }))
   }
 
-  // Calendar helper functions
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear()
     const month = date.getMonth()
@@ -166,17 +202,15 @@ export default function BookingPage() {
     const startingDayOfWeek = firstDay.getDay()
 
     const days = []
-    
-    // Add empty cells for days before the first day of the month
+
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null)
     }
-    
-    // Add all days of the month
+
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day))
     }
-    
+
     return days
   }
 
@@ -205,42 +239,13 @@ export default function BookingPage() {
     today.setHours(0, 0, 0, 0)
     const compareDate = new Date(date)
     compareDate.setHours(0, 0, 0, 0)
-    // Only dates BEFORE today are past dates - today and future are allowed
     return compareDate < today
   }
 
-  // Filter slots based on selected date
   const filteredSlots = slots.filter(slot => {
     const slotDate = new Date(slot.startTime)
-    return slotDate.toDateString() === selectedDate.toDateString()
+    return slotDate.toDateString() > selectedDate.toDateString()
   })
-
-  const handleBookingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setError("")
-
-    try {
-      const response = await makeAuthenticatedRequest(`${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/appointments/create`, {
-        method: "POST",
-        body: JSON.stringify(bookingData),
-      })
-
-      const data = await response.json()
-
-      if (data.success || response.ok) {
-        // Send OTP
-        await sendOTP()
-        setCurrentStep("otp-verification")
-      } else {
-        setError(data.error || "Failed to create appointment")
-      }
-    } catch (err) {
-      setError("Network error. Please try again.")
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
 
   const sendOTP = async () => {
     try {
@@ -268,7 +273,7 @@ export default function BookingPage() {
       const data = await response.json()
 
       if (data.success === "true" || data.success === true) {
-        setCurrentStep("confirmation")
+        setCurrentStep("booking-details")
       } else {
         setError("Invalid OTP. Please try again.")
       }
@@ -279,8 +284,102 @@ export default function BookingPage() {
     }
   }
 
+  const handleBookingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setError("")
+
+    try {
+      // Create proper datetime in IST by combining selectedDate with slot time
+      let appointmentDateTime = bookingData.appointmentDateTime
+      
+      if (selectedSlot) {
+        const slotTime = new Date(selectedSlot.startTime)
+        const appointmentDate = new Date(selectedDate)
+        
+        // If slot time is just time (1970 date), combine with selected date
+        if (slotTime.getFullYear() === 1970) {
+          appointmentDate.setHours(slotTime.getHours(), slotTime.getMinutes(), slotTime.getSeconds())
+        } else {
+          // Use slot's datetime directly if it's a proper datetime
+          appointmentDate.setTime(slotTime.getTime())
+        }
+        
+        // Create IST datetime string manually (without timezone conversion)
+        const year = appointmentDate.getFullYear()
+        const month = String(appointmentDate.getMonth() + 1).padStart(2, '0')
+        const day = String(appointmentDate.getDate()).padStart(2, '0')
+        const hours = String(appointmentDate.getHours()).padStart(2, '0')
+        const minutes = String(appointmentDate.getMinutes()).padStart(2, '0')
+        const seconds = String(appointmentDate.getSeconds()).padStart(2, '0')
+        
+        appointmentDateTime = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.000+05:30`
+      }
+
+      // Prepare the booking data with IST datetime
+      const appointmentData = {
+        ...bookingData,
+        appointmentDateTime,
+        // Also include the date separately in IST
+        date: appointmentDateTime.split('T')[0], // YYYY-MM-DD format from the IST datetime
+        // Include the time separately if your backend needs it
+        time: appointmentDateTime
+      }
+
+      console.log("Sending booking data (IST):", appointmentData)
+      console.log("Selected date:", selectedDate)
+      console.log("Selected slot:", selectedSlot)
+
+      const response = await makeAuthenticatedRequest(
+        `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/appointments/create`, 
+        {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(appointmentData),
+        }
+      )
+
+      const data = await response.json()
+      console.log("Booking response:", data)
+
+      if (data.success || response.ok) {
+        setCurrentStep("confirmation")
+      } else {
+        setError(data.error || data.message || "Failed to create appointment")
+      }
+    } catch (err) {
+      console.error("Booking error:", err)
+      setError("Network error. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const formatDateTime = (dateString: string) => {
+    // Handle case where dateString might be just time (1970 date)
     const date = new Date(dateString)
+    
+    // If it's a 1970 date, it means we only have time, combine with selectedDate
+    if (date.getFullYear() === 1970) {
+      const combinedDate = new Date(selectedDate)
+      combinedDate.setHours(date.getHours(), date.getMinutes(), date.getSeconds())
+      return {
+        date: combinedDate.toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        }),
+        time: combinedDate.toLocaleTimeString("en-IN", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        }),
+      }
+    }
+    
     return {
       date: date.toLocaleDateString("en-IN", {
         weekday: "long",
@@ -362,35 +461,33 @@ export default function BookingPage() {
           <div className="flex items-center justify-between">
             {[
               { key: "slot-selection", label: "Select Slot", icon: Calendar },
-              { key: "booking-details", label: "Booking Details", icon: FileText },
               { key: "otp-verification", label: "Verify OTP", icon: CheckCircle },
+              { key: "booking-details", label: "Booking Details", icon: FileText },
               { key: "confirmation", label: "Confirmation", icon: CheckCircle },
             ].map((step, index) => {
               const Icon = step.icon
               const isActive = currentStep === step.key
               const isCompleted =
-                (currentStep === "booking-details" && step.key === "slot-selection") ||
-                (currentStep === "otp-verification" &&
-                  (step.key === "slot-selection" || step.key === "booking-details")) ||
+                (currentStep === "otp-verification" && step.key === "slot-selection") ||
+                (currentStep === "booking-details" &&
+                  (step.key === "slot-selection" || step.key === "otp-verification")) ||
                 (currentStep === "confirmation" && step.key !== "confirmation")
 
               return (
                 <div key={step.key} className="flex items-center">
                   <div
-                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${
-                      isActive
-                        ? "border-green-700 bg-green-700 text-white"
-                        : isCompleted
-                          ? "border-green-700 bg-green-100 text-green-700"
-                          : "border-gray-300 bg-white text-gray-400"
-                    }`}
+                    className={`flex items-center justify-center w-10 h-10 rounded-full border-2 ${isActive
+                      ? "border-green-700 bg-green-700 text-white"
+                      : isCompleted
+                        ? "border-green-700 bg-green-100 text-green-700"
+                        : "border-gray-300 bg-white text-gray-400"
+                      }`}
                   >
                     <Icon className="h-5 w-5" />
                   </div>
                   <span
-                    className={`ml-2 text-sm font-medium ${
-                      isActive || isCompleted ? "text-green-700" : "text-gray-400"
-                    }`}
+                    className={`ml-2 text-sm font-medium ${isActive || isCompleted ? "text-green-700" : "text-gray-400"
+                      }`}
                   >
                     {step.label}
                   </span>
@@ -444,10 +541,19 @@ export default function BookingPage() {
 
         {/* Slot Lock Timer */}
         {slotLockTimer > 0 && selectedSlot && currentStep !== "confirmation" && (
-          <Alert className="max-w-4xl mx-auto mb-6 border-orange-200 bg-orange-50">
-            <AlertCircle className="h-4 w-4 text-orange-600" />
-            <AlertDescription className="text-orange-700">
-              Slot reserved for {formatTimer(slotLockTimer)}. Please complete your booking before the timer expires.
+          <Alert className={`max-w-4xl mx-auto mb-6 ${slotLockTimer <= 60
+            ? 'border-red-200 bg-red-50'
+            : 'border-orange-200 bg-orange-50'
+            }`}>
+            <AlertCircle className={`h-4 w-4 ${slotLockTimer <= 60 ? 'text-red-600' : 'text-orange-600'
+              }`} />
+            <AlertDescription className={`${slotLockTimer <= 60 ? 'text-red-700' : 'text-orange-700'
+              }`}>
+              {slotLockTimer <= 60 ? (
+                <>⚠️ Slot reservation expiring in {formatTimer(slotLockTimer)}! Please complete your booking quickly.</>
+              ) : (
+                <>Slot reserved for {formatTimer(slotLockTimer)}. Please complete your booking before the timer expires.</>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -460,10 +566,11 @@ export default function BookingPage() {
 
         {/* Step Content */}
         <div className="max-w-4xl mx-auto">
+
           {currentStep === "slot-selection" && (
             <div className="grid lg:grid-cols-2 gap-6">
               {/* Calendar Component */}
-              <Card className="border-green-100">
+              <Card className="border-green-100 h-[65vh]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-green-700">
                     <Calendar className="h-5 w-5" />
@@ -507,18 +614,18 @@ export default function BookingPage() {
                       const hasSlots = isDateAvailable(date)
                       const isSelected = isDateSelected(date)
                       const isPast = isPastDate(date)
-                      
+
                       return (
                         <button
                           key={index}
                           onClick={() => date && !isPast && setSelectedDate(date)}
-                          disabled={!date || isPast || !hasSlots}
+                          disabled={!date || isPast}
                           className={`
                             p-2 text-sm rounded-md transition-all h-10
                             ${!date ? 'invisible' : ''}
                             ${isPast ? 'text-gray-300 cursor-not-allowed' : ''}
-                            ${hasSlots && !isPast ? 'hover:bg-green-50 cursor-pointer' : ''}
-                            ${!hasSlots && !isPast ? 'text-gray-400 cursor-not-allowed' : ''}
+                            ${!isPast && date ? 'hover:bg-green-50 cursor-pointer' : ''}
+                            ${!hasSlots && !isPast && date ? 'text-gray-500 hover:bg-gray-50' : ''}
                             ${isSelected ? 'bg-green-600 text-white' : ''}
                             ${hasSlots && !isSelected && !isPast ? 'bg-green-100 text-green-700' : ''}
                           `}
@@ -548,114 +655,215 @@ export default function BookingPage() {
               </Card>
 
               {/* Time Slots Component */}
-              <Card className="border-green-100">
+              <Card className="border-green-100 h-[65vh]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-green-700">
                     <Clock className="h-5 w-5" />
                     Available Slots
                   </CardTitle>
                   <CardDescription>
-                    {selectedDate.toLocaleDateString('en-IN', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
+                    {selectedDate.toLocaleDateString('en-IN', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
                     })}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {slots.length === 0 ? (
-                    <div className="text-center py-8">
+                <CardContent className="h-full p-6">
+                  {filteredSlots.length === 0 ? (
+                    <div className="text-center py-8 h-full flex flex-col justify-center">
                       <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No slots available</h3>
-                      <p className="text-gray-600">Please select a different date or contact the doctor directly.</p>
+                      <p className="text-gray-600">
+                        {isPastDate(selectedDate)
+                          ? "Please select a future date."
+                          : "No appointments available on this date. Please select a different date."
+                        }
+                      </p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      {slots.map((slot) => {
-                        const { time } = formatDateTime(slot.startTime)
-                        const isSelected = selectedSlot?.id === slot.id
-                    
-                        return (
-                          <Card
-                            key={slot.id}
-                            className={`cursor-pointer transition-all hover:shadow-sm rounded-lg ${
-                              isSelected ? "border-green-600 bg-green-50" : "border-gray-200"
-                            }`}
-                            onClick={() => handleSlotSelection(slot)}
-                          >
-                            <CardContent className="p-3 flex items-center justify-center">
-                              <span className="text-green-700 font-medium text-sm">{time}</span>
-                              {isSelected && <CheckCircle className="h-4 w-4 text-green-700 ml-2" />}
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  )}
+                    <div className="h-full flex flex-col pb-4">
+                      {/* Scrollable slots area - Fixed height */}
+                      <div className={`${selectedSlot ? 'h-1/2' : 'h-full'} overflow-y-auto mb-4`}>
+                        <div className="grid grid-cols-2 gap-3">
+                          {filteredSlots.map((slot) => {
+                            const { time } = formatDateTime(slot.startTime)
+                            const isSelected = selectedSlot?.id === slot.id
 
-                  {selectedSlot && (
-                    <div className="mt-6">
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                        <h4 className="font-medium text-green-800 mb-1">Selected Appointment</h4>
-                        <p className="text-green-700 text-sm">
-                          {selectedDate.toLocaleDateString('en-IN', { 
-                            weekday: 'long', 
-                            year: 'numeric', 
-                            month: 'long', 
-                            day: 'numeric' 
-                          })} at {formatDateTime(selectedSlot.startTime).time}
-                        </p>
+                            return (
+                              <Card
+                                key={slot.id}
+                                className={`cursor-pointer flex items-center transition-all hover:shadow-sm rounded-lg ${isSelected ? "border-green-600 bg-green-50" : "border-gray-200"
+                                  }`}
+                                onClick={() => handleSlotSelection(slot)}
+                              >
+                                <CardContent className="flex items-center justify-center">
+                                  <span className="text-green-700 font-medium text-sm">{time}</span>
+                                  {isSelected && <CheckCircle className="h-4 w-4 text-green-700 ml-2" />}
+                                </CardContent>
+                              </Card>
+                            )
+                          })}
+                        </div>
                       </div>
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={async () => {
-                            setIsSubmitting(true)
-                            setError("")
-                            
-                            try {
-                              const response = await makeAuthenticatedRequest(
-                                `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/lock-slot`,
-                                {
-                                  method: "POST",
-                                  body: JSON.stringify({
-                                    slotId: selectedSlot.id,
-                                    doctorId: doctorId
-                                  })
+
+                      {selectedSlot && (
+                        <div className="h-1/2 flex flex-col bg-green-50/30 rounded-lg">
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                            <h4 className="font-medium text-green-800 mb-2 text-center">Selected Appointment</h4>
+                            <div className="text-center">
+                              <p className="text-green-700 text-sm font-medium">
+                                {selectedDate.toLocaleDateString('en-IN', {
+                                  weekday: 'long',
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric'
+                                })}
+                              </p>
+                              <p className="text-green-800 text-lg font-bold">
+                                {formatDateTime(selectedSlot.startTime).time}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex-1 flex justify-center">
+                            <Button
+                              onClick={async () => {
+                                setIsSubmitting(true)
+                                setError("")
+
+                                try {
+                                  const response = await makeAuthenticatedRequest(
+                                    `${process.env.NEXT_PUBLIC_BASE_URL}/api/v1/auth/lock-slot`,
+                                    {
+                                      method: "POST",
+                                      body: JSON.stringify({
+                                        slotId: selectedSlot.id,
+                                        doctorId: doctorId
+                                      })
+                                    }
+                                  )
+
+                                  const data = await response.json()
+
+                                  if (data.success || response.ok) {
+                                    await sendOTP()
+                                    setCurrentStep("otp-verification")
+                                    setSlotLockTimer(300)
+                                  } else {
+                                    setError(data.error || "Failed to lock slot. Please try again.")
+                                  }
+                                } catch (err) {
+                                  setError("Network error. Please try again.")
+                                } finally {
+                                  setIsSubmitting(false)
                                 }
-                              )
-                              
-                              const data = await response.json()
-                              
-                              if (data.success || response.ok) {
-                                setCurrentStep("booking-details")
-                              } else {
-                                setError(data.error || "Failed to lock slot. Please try again.")
-                              }
-                            } catch (err) {
-                              setError("Network error. Please try again.")
-                            } finally {
-                              setIsSubmitting(false)
-                            }
-                          }}
-                          disabled={isSubmitting}
-                          className="bg-green-700 hover:bg-green-800"
-                        >
-                          {isSubmitting ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Reserving Slot...
-                            </>
-                          ) : (
-                            "Continue to Booking Details"
-                          )}
-                        </Button>
-                      </div>
+                              }}
+                              disabled={isSubmitting}
+                              className="bg-green-700 hover:bg-green-800 w-full mt-0 text-sm font-semibold"
+                              size="sm"
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                  Reserving Slot...
+                                </>
+                              ) : (
+                                "Continue to Verify OTP"
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {currentStep === "otp-verification" && (
+            <Card className="border-green-100">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-700">
+                  <CheckCircle className="h-5 w-5" />
+                  Verify OTP
+                </CardTitle>
+                <CardDescription>Enter the OTP sent to your registered email address</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {selectedSlot && (
+                  <div className="bg-green-50 p-4 rounded-lg mb-6">
+                    <h4 className="font-medium text-gray-900 mb-2">Selected Appointment</h4>
+                    <div className="flex items-center gap-4 text-sm text-gray-600">
+                      
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {selectedDate.toLocaleDateString('en-IN', {
+                                  weekday: 'long',
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric'
+                                })}
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {formatDateTime(selectedSlot.startTime).time}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleOTPVerification} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="otp">Enter OTP *</Label>
+                    <Input
+                      id="otp"
+                      type="text"
+                      placeholder="Enter 6-digit OTP"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      required
+                      maxLength={6}
+                      className="border-green-200 focus:border-green-500 text-center text-lg tracking-widest"
+                    />
+                  </div>
+
+                  <div className="text-center">
+                    <Button
+                      type="button"
+                      variant="link"
+                      onClick={sendOTP}
+                      className="text-green-700 hover:text-green-800"
+                    >
+                      Resend OTP
+                    </Button>
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setCurrentStep("slot-selection")}
+                      className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent"
+                    >
+                      Back to Slots
+                    </Button>
+                    <Button type="submit" disabled={isSubmitting} className="bg-green-700 hover:bg-green-800">
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        "Verify OTP"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
           )}
 
           {currentStep === "booking-details" && (
@@ -753,10 +961,10 @@ export default function BookingPage() {
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => setCurrentStep("slot-selection")}
+                      onClick={() => setCurrentStep("otp-verification")}
                       className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent"
                     >
-                      Back to Slots
+                      Back to OTP
                     </Button>
                     <Button type="submit" disabled={isSubmitting} className="bg-green-700 hover:bg-green-800">
                       {isSubmitting ? (
@@ -766,67 +974,6 @@ export default function BookingPage() {
                         </>
                       ) : (
                         "Confirm Booking"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          )}
-
-          {currentStep === "otp-verification" && (
-            <Card className="border-green-100">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="h-5 w-5" />
-                  Verify OTP
-                </CardTitle>
-                <CardDescription>Enter the OTP sent to your registered email address</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleOTPVerification} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="otp">Enter OTP *</Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="Enter 6-digit OTP"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      required
-                      maxLength={6}
-                      className="border-green-200 focus:border-green-500 text-center text-lg tracking-widest"
-                    />
-                  </div>
-
-                  <div className="text-center">
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={sendOTP}
-                      className="text-green-700 hover:text-green-800"
-                    >
-                      Resend OTP
-                    </Button>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setCurrentStep("booking-details")}
-                      className="border-green-700 text-green-700 hover:bg-green-50 bg-transparent"
-                    >
-                      Back to Details
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting} className="bg-green-700 hover:bg-green-800">
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Verifying...
-                        </>
-                      ) : (
-                        "Verify OTP"
                       )}
                     </Button>
                   </div>
